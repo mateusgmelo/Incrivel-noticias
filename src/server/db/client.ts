@@ -2,6 +2,7 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { env } from "@/server/core/config/env";
 import * as schema from "./schema";
+import { pgConfig } from "./ssl";
 
 export type Database = NodePgDatabase<typeof schema>;
 
@@ -14,7 +15,7 @@ const globalForDb = globalThis as unknown as { pgPool?: Pool };
 
 function createPool() {
   return new Pool({
-    connectionString: env().DATABASE_URL,
+    ...pgConfig(env().DATABASE_URL),
     max: env().NODE_ENV === "production" ? 3 : 10,
     idleTimeoutMillis: 10_000,
   });

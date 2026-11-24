@@ -8,13 +8,14 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import bcrypt from "bcryptjs";
 import { Pool } from "pg";
 import * as schema from "../src/server/db/schema";
+import { pgConfig } from "../src/server/db/ssl";
 import { SEED_ARTICLES, SEED_CATEGORIES } from "./seed-data";
 
 const slugify = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 async function main() {
-  const pool = new Pool({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL, max: 1 });
+  const pool = new Pool({ ...pgConfig((process.env.DIRECT_URL ?? process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL)!), max: 1 });
   const db = drizzle(pool, { schema });
   const password = process.env.SEED_DEFAULT_PASSWORD ?? "Incrivel@2026";
   const passwordHash = await bcrypt.hash(password, 10);
