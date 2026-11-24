@@ -3,6 +3,14 @@
  * trazer `sslmode`. Bancos locais (docker compose, localhost) seguem sem SSL.
  * Segurança não deve depender de alguém lembrar de um parâmetro na connection string.
  */
+/**
+ * Normaliza a connection string vinda do ambiente: remove espaços e aspas nas pontas
+ * (erro comum ao colar linhas de um .env no painel do provedor).
+ */
+export function cleanConnectionString(raw: string): string {
+  return raw.trim().replace(/^['"]+|['"]+$/g, "").trim();
+}
+
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "db", "host.docker.internal"]);
 
 export function sslFor(connectionString: string): false | { rejectUnauthorized: true } {
@@ -27,6 +35,7 @@ export function stripSslParams(connectionString: string): string {
   }
 }
 
-export function pgConfig(connectionString: string) {
+export function pgConfig(raw: string) {
+  const connectionString = cleanConnectionString(raw);
   return { connectionString: stripSslParams(connectionString), ssl: sslFor(connectionString) };
 }

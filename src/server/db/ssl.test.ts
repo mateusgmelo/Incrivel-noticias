@@ -16,4 +16,10 @@ describe("política de SSL do banco", () => {
     expect(cfg.connectionString).toBe("postgresql://u:p@ep-x.neon.tech/db");
     expect(cfg.ssl).toEqual({ rejectUnauthorized: true });
   });
+
+  it("tolera aspas e espaços colados por engano no valor da variável", () => {
+    const cfg = pgConfig(' "postgresql://u:p@ep-x.neon.tech/db?sslmode=verify-full" ');
+    expect(cfg.connectionString).toBe("postgresql://u:p@ep-x.neon.tech/db");
+    expect(cfg.ssl).toEqual({ rejectUnauthorized: true });
+  });
 });
