@@ -1,11 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import { SITE_DESCRIPTION, SITE_NAME, siteUrl } from "@/lib/site";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "Incrível Notícias — Pernambuco e o mundo", template: "%s | Incrível Notícias" },
-  description: "Portal de notícias com cobertura de Pernambuco: política, economia, cidades, esportes, cultura e tecnologia.",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
-  openGraph: { siteName: "Incrível Notícias", locale: "pt_BR", type: "website" },
+  title: { default: `${SITE_NAME} — Pernambuco e o mundo`, template: `%s | ${SITE_NAME}` },
+  description: SITE_DESCRIPTION,
+  metadataBase: new URL(siteUrl()),
+  openGraph: { siteName: SITE_NAME, locale: "pt_BR", type: "website" },
+  twitter: { card: "summary_large_image" },
+  alternates: { types: { "application/rss+xml": [{ url: "/feed.xml", title: SITE_NAME }] } },
 };
 
 export const viewport: Viewport = { themeColor: "#b4121b" };

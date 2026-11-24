@@ -1,11 +1,26 @@
 # Incrível Notícias
 
+[![CI](https://github.com/mateusgmelo/incrivel-noticias/actions/workflows/ci.yml/badge.svg)](https://github.com/mateusgmelo/incrivel-noticias/actions/workflows/ci.yml)
+![Node](https://img.shields.io/badge/node-22.x-339933?logo=node.js&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-15-000?logo=next.js)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+
 Portal de notícias com painel editorial, controle de acesso por hierarquia e agregador de manchetes via RSS.
 
 **Stack:** Next.js 15 (App Router) · TypeScript · PostgreSQL 16 · Drizzle ORM · Zod · JWT (jose) · Tailwind CSS 4 · Vitest · Docker · Vercel + Neon
 
-> 🔗 **Produção:** _[adicionar URL da Vercel]_
+> 🔗 **Produção:** https://incrivelnoticias.vercel.app · painel em [/admin](https://incrivelnoticias.vercel.app/admin) · status em [/api/health](https://incrivelnoticias.vercel.app/api/health)
 > 👤 **Contas de demonstração** (senha `Incrivel@2026`): `admin@incrivelnoticias.com` · `editor@incrivelnoticias.com` · `reporter@incrivelnoticias.com`
+
+## Telas
+
+| Capa | Matéria |
+|---|---|
+| ![Capa do portal](docs/screenshots/site-capa.jpg) | ![Página de matéria](docs/screenshots/site-materia.jpg) |
+| **Painel do editor** — contadores por status e fila de revisão | **Revisão** — matéria importada via RSS, com as ações que a policy libera |
+| ![Painel do editor](docs/screenshots/painel-dashboard.jpg) | ![Revisão de matéria](docs/screenshots/painel-revisao.jpg) |
+| **Usuários** (só admin) — papéis e ativação, com proteção contra autorrebaixamento | **Auditoria** (só admin) — quem fez o quê, quando |
+| ![Gestão de usuários](docs/screenshots/painel-usuarios.jpg) | ![Auditoria](docs/screenshots/painel-auditoria.jpg) |
 
 ---
 
@@ -17,9 +32,11 @@ Portal de notícias com painel editorial, controle de acesso por hierarquia e ag
 5. [Fluxo editorial](#fluxo-editorial-máquina-de-estados)
 6. [API](#api)
 7. [Agregador RSS](#agregador-rss)
-8. [Deploy](#deploy-vercel--neon)
-9. [Decisões técnicas](#decisões-técnicas)
-10. [Limitações conhecidas e próximos passos](#limitações-conhecidas-e-próximos-passos)
+8. [Busca full-text](#busca-full-text)
+9. [SEO e distribuição](#seo-e-distribuição)
+10. [Deploy](#deploy-vercel--neon)
+11. [Decisões técnicas](#decisões-técnicas)
+12. [Limitações conhecidas e próximos passos](#limitações-conhecidas-e-próximos-passos)
 
 ---
 
@@ -40,6 +57,9 @@ npm run dev                  # http://localhost:3000  |  painel: /admin
 docker compose --profile full up --build
 ```
 Sobe o banco, roda migrations + seed em um container efêmero (`migrate`) e só então inicia a aplicação (`app`) a partir de uma imagem multi-stage com output `standalone`.
+
+### Integração contínua
+Todo push e pull request roda no GitHub Actions: **lint → typecheck → testes → build de produção**. A Vercel gera um *preview deploy* por PR, e só o merge na `main` publica em produção.
 
 ### Scripts
 | Script | O que faz |
@@ -125,12 +145,51 @@ scripts/                     migrate.ts, seed.ts
 
 ## Modelo de dados
 
-```
-users ──1:N── articles ──N:1── categories
-                 │
-                 └──N:N── tags   (via article_tags)
+```mermaid
+erDiagram
+    users ||--o{ articles : "escreve"
+    categories ||--o{ articles : "agrupa"
+    articles ||--o{ article_tags : ""
+    tags ||--o{ article_tags : ""
+    users |o--o{ audit_logs : "executa"
 
-audit_logs ──N:1── users (ator, SET NULL ao remover)
+    users {
+        uuid id PK
+        varchar email UK
+        text password_hash
+        enum role "REPORTER | EDITOR | ADMIN"
+        boolean active
+    }
+    categories {
+        uuid id PK
+        varchar name UK
+        varchar slug UK
+    }
+    articles {
+        uuid id PK
+        varchar slug UK
+        enum status "DRAFT | IN_REVIEW | PUBLISHED | ARCHIVED"
+        enum source "ORIGINAL | IMPORTED"
+        text source_url UK "deduplicação RSS"
+        tsvector search_vector "gerada + GIN"
+        timestamptz published_at
+        uuid author_id FK
+        uuid category_id FK
+    }
+    tags {
+        uuid id PK
+        varchar slug UK
+    }
+    article_tags {
+        uuid article_id PK, FK
+        uuid tag_id PK, FK
+    }
+    audit_logs {
+        uuid id PK
+        uuid actor_id FK
+        varchar action
+        jsonb meta
+    }
 ```
 
 | Tabela | Destaques |
@@ -179,10 +238,16 @@ audit_logs ──N:1── users (ator, SET NULL ao remover)
 
 ## Fluxo editorial (máquina de estados)
 
-```
-DRAFT ──submit──► IN_REVIEW ──publish──► PUBLISHED ──archive──► ARCHIVED
-  ▲                   │                      ▲                       │
-  └──────reject───────┘                      └────────publish────────┘
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> DRAFT: criar (qualquer papel)
+    DRAFT --> IN_REVIEW: submit (autor ou editor+)
+    IN_REVIEW --> DRAFT: reject (editor+)
+    DRAFT --> PUBLISHED: publish (editor+)
+    IN_REVIEW --> PUBLISHED: publish (editor+)
+    PUBLISHED --> ARCHIVED: archive (editor+)
+    ARCHIVED --> PUBLISHED: publish (editor+)
 ```
 
 Transições são **endpoints de ação** (`POST /api/admin/articles/:id/publish`), não `PATCH { status }`. Cada ação tem sua regra, fica auditada e retorna `409` com os estados permitidos quando inválida para o estado atual. A tabela de transições está em `article.policy.ts` e é coberta por testes.
@@ -252,6 +317,28 @@ Fontes em `src/server/modules/ingest/ingest.sources.ts`, sobrescrevíveis sem de
 
 ---
 
+## Busca full-text
+
+Busca nativa do PostgreSQL, sem serviço externo:
+
+- **Coluna gerada `search_vector`** (`tsvector`, `STORED`): o próprio banco mantém o índice sempre consistente com o conteúdo, sem trigger nem código de sincronização
+- **Pesos**: título (A) > resumo (B) > corpo (C) — ordenação por `ts_rank_cd`
+- **Dicionário `portuguese`**: flexões viram o mesmo radical (*votar*, *votos*, *vota* → `vot`; *torcedores* → `torcedor`)
+- **Insensível a acento** via função `pt_unaccent` `IMMUTABLE` baseada em `translate()` — sem depender da extensão `unaccent`, que exige superusuário no provedor gerenciado
+- **Índice GIN** (`EXPLAIN` confirma `Bitmap Index Scan on articles_search_idx`)
+- **Sintaxe de busca web** (`websearch_to_tsquery`): `"frase exata"`, `-excluir`, `or`
+- Fallback por trecho do título para digitação parcial (*"Recif"*)
+
+## SEO e distribuição
+
+Um portal de notícias vive de ser encontrado:
+
+- **`/sitemap.xml`** dinâmico: capa, editorias e matérias próprias publicadas (com `lastModified`)
+- **`/robots.txt`**: libera o site, bloqueia `/admin` e `/api/`, aponta o sitemap
+- **Dados estruturados `NewsArticle`** (JSON-LD) em cada matéria — o formato que buscadores usam para resultados de notícia
+- **`/feed.xml`**: feed RSS 2.0 do próprio portal, anunciado via `<link rel="alternate">`. Testado em ida e volta: o XML gerado é lido pelo **mesmo agregador** do projeto
+- Open Graph / Twitter Cards por matéria, `canonical` correto (manchetes agregadas apontam para a fonte original e ficam fora do sitemap e do feed)
+
 ## Deploy (Vercel + Neon)
 
 A Vercel é serverless e não executa containers nem bancos, então o Docker cobre o ambiente local/portável e o Postgres de produção é o **Neon** (gerenciado, mesmo motor do ambiente local).
@@ -295,18 +382,26 @@ Por que duas URLs: a aplicação usa o pooler (muitas funções serverless, pouc
 
 ## Testes
 
-```bash
-npm test
-```
-23 testes unitários cobrindo o que concentra regra de negócio: matriz de permissões, máquina de estados editorial e normalização do agregador RSS. Os fluxos de API foram validados ponta a ponta contra Postgres real (login, RBAC, transições, validação, deduplicação, revogação de acesso).
+Duas camadas, ambas no CI a cada pull request:
 
----
+| Camada | Comando | O que cobre |
+|---|---|---|
+| **Unitários** (30) | `npm test` | Regras puras, sem banco: matriz RBAC, máquina de estados editorial, normalização do RSS, geração do feed, política de SSL |
+| **Integração** (30) | `npm run test:int` | Services contra **Postgres real** com as migrations do projeto: fluxo editorial completo, visibilidade por papel, auditoria, autenticação, gestão de usuários, integridade referencial, busca full-text (acentos, radicais, ranking, sintaxe, entrada maliciosa), paginação e o agregador RSS ponta a ponta (servidor HTTP local servindo feeds) |
+
+```bash
+# integração local (usa o Postgres do docker compose, em um banco separado)
+docker compose exec db createdb -U incrivel incrivel_test
+TEST_DATABASE_URL="postgresql://incrivel:incrivel@localhost:5433/incrivel_test" npm run test:int
+```
+
+> **Trava de segurança:** os testes de integração zeram o banco entre cenários, por isso **se recusam a rodar** se a URL não apontar para um host local — impossível apagar produção por engano.
 
 ## Limitações conhecidas e próximos passos
 
 - **Rate limit em memória:** por instância; em produção real usar Redis (Upstash/Vercel KV).
 - **Cache:** páginas são dinâmicas para refletir publicação na hora. Evolução natural: ISR + `revalidatePath` disparado pelo service ao publicar.
-- **Busca:** `ILIKE` em título/resumo. Próximo passo: `tsvector` + índice GIN com dicionário `portuguese`.
+- **Busca:** o stemmer `portuguese` une flexões (votar/votos/vota) mas não derivações (votar ≠ votação). Próximo passo: dicionário de sinônimos ou busca semântica com embeddings (`pgvector`).
 - **Imagens:** capa por URL. Próximo passo: upload para Vercel Blob/S3.
 - **Testes de integração** dos services com banco efêmero (Testcontainers) e E2E (Playwright).
 - **Editor rico** (Markdown/TipTap) e agendamento de publicação.

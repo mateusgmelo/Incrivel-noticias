@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArticleCard } from "@/components/site/ArticleCard";
 import { ViewTracker } from "@/components/site/ViewTracker";
 import { formatDateTime } from "@/lib/format";
+import { SITE_NAME, siteUrl } from "@/lib/site";
 import { NotFoundError } from "@/server/core/http/errors";
 import { articlesService } from "@/server/modules/articles/article.service";
 
@@ -41,8 +42,32 @@ export default async function ArticlePage({ params }: Props) {
   const related = await articlesService.related(article);
   const imported = article.source === "IMPORTED";
 
+  // Dados estruturados (schema.org/NewsArticle): o que buscadores usam para rich results de notícia.
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    headline: article.title,
+    description: article.excerpt,
+    image: article.coverImageUrl ? [article.coverImageUrl] : undefined,
+    datePublished: article.publishedAt?.toISOString(),
+    dateModified: article.updatedAt.toISOString(),
+    articleSection: article.categoryName,
+    keywords: article.tags.map((t) => t.name).join(", ") || undefined,
+    author: imported
+      ? { "@type": "Organization", name: article.sourceName }
+      : { "@type": "Person", name: article.authorName },
+    publisher: { "@type": "Organization", name: SITE_NAME, url: siteUrl() },
+    mainEntityOfPage: imported && article.sourceUrl ? article.sourceUrl : `${siteUrl()}/noticia/${article.slug}`,
+    isAccessibleForFree: true,
+  };
+
   return (
     <div className="grid gap-12 lg:grid-cols-3">
+      <script
+        type="application/ld+json"
+        // JSON.stringify + escape de "<" impede injeção de </script> via conteúdo
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+      />
       <ViewTracker slug={article.slug} />
       <article className="lg:col-span-2">
         <Link href={`/categoria/${article.categorySlug}`} className="text-sm font-bold uppercase tracking-wider text-brand">

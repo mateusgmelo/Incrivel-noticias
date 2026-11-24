@@ -1,7 +1,7 @@
 /**
  * Acesso a dados de artigos. Só SQL/Drizzle aqui — nenhuma regra de negócio.
  */
-import { and, count, desc, eq, ilike, inArray, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, inArray, ne, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import {
   articles,
@@ -46,6 +46,9 @@ export type ListFilter = {
   featured?: boolean;
 };
 
+/** Converte a busca do usuário em tsquery (aceita "aspas", OR e -exclusão). */
+const tsQuery = (q: string) => sql`websearch_to_tsquery('portuguese', pt_unaccent(${q}))`;
+
 function buildWhere(f: ListFilter): SQL | undefined {
   const conds: (SQL | undefined)[] = [];
   if (f.status) conds.push(eq(articles.status, f.status));
@@ -54,8 +57,15 @@ function buildWhere(f: ListFilter): SQL | undefined {
   if (f.excludeId) conds.push(ne(articles.id, f.excludeId));
   if (f.featured !== undefined) conds.push(eq(articles.featured, f.featured));
   if (f.q) {
+    // Full-text (radicais em português, sem acento) OU trecho do título — cobre busca
+    // por palavra inteira ("votação" ~ "votar") e digitação parcial ("Recif").
     const term = `%${f.q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
-    conds.push(or(ilike(articles.title, term), ilike(articles.excerpt, term)));
+    conds.push(
+      or(
+        sql`${articles.searchVector} @@ ${tsQuery(f.q)}`,
+        sql`pt_unaccent(${articles.title}) like pt_unaccent(${term})`,
+      ),
+    );
   }
   if (f.tagSlug) {
     conds.push(
@@ -72,10 +82,12 @@ function buildWhere(f: ListFilter): SQL | undefined {
   return and(...conds);
 }
 
-type Order = "recent" | "views" | "updated";
+type Order = "recent" | "views" | "updated" | "relevance";
 
-const orderBy = (o: Order) =>
-  o === "views"
+const orderBy = (o: Order, q?: string) =>
+  o === "relevance" && q
+    ? [sql`ts_rank_cd(${articles.searchVector}, ${tsQuery(q)}) desc`, sql`${articles.publishedAt} desc nulls last`]
+    : o === "views"
     ? [desc(articles.views), desc(articles.publishedAt)]
     : o === "updated"
       ? [desc(articles.updatedAt)]
@@ -90,7 +102,7 @@ export const articlesRepository = {
       .innerJoin(users, eq(users.id, articles.authorId))
       .innerJoin(categories, eq(categories.id, articles.categoryId))
       .where(where)
-      .orderBy(...orderBy(opts.order ?? "recent"))
+      .orderBy(...orderBy(opts.order ?? (filter.q ? "relevance" : "recent"), filter.q))
       .limit(opts.limit)
       .offset(opts.offset ?? 0);
     return base;

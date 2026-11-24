@@ -7,6 +7,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
   boolean,
+  customType,
   index,
   integer,
   jsonb,
@@ -31,6 +32,20 @@ export const articleStatusEnum = pgEnum("article_status", [
 ]);
 
 export const articleSourceEnum = pgEnum("article_source", ["ORIGINAL", "IMPORTED"]);
+
+/** Tipo nativo do Postgres para busca textual. */
+const tsvector = customType<{ data: string }>({
+  dataType: () => "tsvector",
+});
+
+/**
+ * Vetor de busca gerado pelo próprio banco (sempre consistente, sem trigger):
+ * título pesa mais (A) que resumo (B) e corpo (C). `pt_unaccent` é criada na migration.
+ */
+const searchVectorExpr = sql`
+  setweight(to_tsvector('portuguese', pt_unaccent(coalesce(title, ''))), 'A') ||
+  setweight(to_tsvector('portuguese', pt_unaccent(coalesce(excerpt, ''))), 'B') ||
+  setweight(to_tsvector('portuguese', pt_unaccent(coalesce(body, ''))), 'C')`;
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -77,6 +92,8 @@ export const articles = pgTable(
     /** Link da matéria original (só importadas). Único => deduplicação na ingestão. */
     sourceUrl: text("source_url").unique(),
 
+    searchVector: tsvector("search_vector").generatedAlwaysAs(searchVectorExpr),
+
     authorId: uuid("author_id")
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
@@ -92,6 +109,8 @@ export const articles = pgTable(
     index("articles_category_status_idx").on(t.categoryId, t.status),
     // "Meus artigos" no painel
     index("articles_author_idx").on(t.authorId),
+    // Busca full-text
+    index("articles_search_idx").using("gin", t.searchVector),
   ],
 );
 
