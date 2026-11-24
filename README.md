@@ -1,10 +1,15 @@
 # Incrível Notícias
 
+[![CI](https://github.com/mateusgmelo/incrivel-noticias/actions/workflows/ci.yml/badge.svg)](https://github.com/mateusgmelo/incrivel-noticias/actions/workflows/ci.yml)
+![Node](https://img.shields.io/badge/node-22.x-339933?logo=node.js&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-15-000?logo=next.js)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+
 Portal de notícias com painel editorial, controle de acesso por hierarquia e agregador de manchetes via RSS.
 
 **Stack:** Next.js 15 (App Router) · TypeScript · PostgreSQL 16 · Drizzle ORM · Zod · JWT (jose) · Tailwind CSS 4 · Vitest · Docker · Vercel + Neon
 
-> 🔗 **Produção:** _[adicionar URL da Vercel]_
+> 🔗 **Produção:** https://incrivelnoticias.vercel.app · painel em [/admin](https://incrivelnoticias.vercel.app/admin) · status em [/api/health](https://incrivelnoticias.vercel.app/api/health)
 > 👤 **Contas de demonstração** (senha `Incrivel@2026`): `admin@incrivelnoticias.com` · `editor@incrivelnoticias.com` · `reporter@incrivelnoticias.com`
 
 ---
@@ -40,6 +45,9 @@ npm run dev                  # http://localhost:3000  |  painel: /admin
 docker compose --profile full up --build
 ```
 Sobe o banco, roda migrations + seed em um container efêmero (`migrate`) e só então inicia a aplicação (`app`) a partir de uma imagem multi-stage com output `standalone`.
+
+### Integração contínua
+Todo push e pull request roda no GitHub Actions: **lint → typecheck → testes → build de produção**. A Vercel gera um *preview deploy* por PR, e só o merge na `main` publica em produção.
 
 ### Scripts
 | Script | O que faz |
