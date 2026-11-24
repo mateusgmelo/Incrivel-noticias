@@ -22,10 +22,11 @@ Portal de notícias com painel editorial, controle de acesso por hierarquia e ag
 5. [Fluxo editorial](#fluxo-editorial-máquina-de-estados)
 6. [API](#api)
 7. [Agregador RSS](#agregador-rss)
-8. [SEO e distribuição](#seo-e-distribuição)
-9. [Deploy](#deploy-vercel--neon)
-10. [Decisões técnicas](#decisões-técnicas)
-11. [Limitações conhecidas e próximos passos](#limitações-conhecidas-e-próximos-passos)
+8. [Busca full-text](#busca-full-text)
+9. [SEO e distribuição](#seo-e-distribuição)
+10. [Deploy](#deploy-vercel--neon)
+11. [Decisões técnicas](#decisões-técnicas)
+12. [Limitações conhecidas e próximos passos](#limitações-conhecidas-e-próximos-passos)
 
 ---
 
@@ -261,6 +262,18 @@ Fontes em `src/server/modules/ingest/ingest.sources.ts`, sobrescrevíveis sem de
 
 ---
 
+## Busca full-text
+
+Busca nativa do PostgreSQL, sem serviço externo:
+
+- **Coluna gerada `search_vector`** (`tsvector`, `STORED`): o próprio banco mantém o índice sempre consistente com o conteúdo, sem trigger nem código de sincronização
+- **Pesos**: título (A) > resumo (B) > corpo (C) — ordenação por `ts_rank_cd`
+- **Dicionário `portuguese`**: flexões viram o mesmo radical (*votar*, *votos*, *vota* → `vot`; *torcedores* → `torcedor`)
+- **Insensível a acento** via função `pt_unaccent` `IMMUTABLE` baseada em `translate()` — sem depender da extensão `unaccent`, que exige superusuário no provedor gerenciado
+- **Índice GIN** (`EXPLAIN` confirma `Bitmap Index Scan on articles_search_idx`)
+- **Sintaxe de busca web** (`websearch_to_tsquery`): `"frase exata"`, `-excluir`, `or`
+- Fallback por trecho do título para digitação parcial (*"Recif"*)
+
 ## SEO e distribuição
 
 Um portal de notícias vive de ser encontrado:
@@ -319,7 +332,7 @@ Duas camadas, ambas no CI a cada pull request:
 | Camada | Comando | O que cobre |
 |---|---|---|
 | **Unitários** (30) | `npm test` | Regras puras, sem banco: matriz RBAC, máquina de estados editorial, normalização do RSS, geração do feed, política de SSL |
-| **Integração** (23) | `npm run test:int` | Services contra **Postgres real** com as migrations do projeto: fluxo editorial completo, visibilidade por papel, auditoria, autenticação, gestão de usuários, integridade referencial, busca/paginação e o agregador RSS ponta a ponta (servidor HTTP local servindo feeds) |
+| **Integração** (30) | `npm run test:int` | Services contra **Postgres real** com as migrations do projeto: fluxo editorial completo, visibilidade por papel, auditoria, autenticação, gestão de usuários, integridade referencial, busca full-text (acentos, radicais, ranking, sintaxe, entrada maliciosa), paginação e o agregador RSS ponta a ponta (servidor HTTP local servindo feeds) |
 
 ```bash
 # integração local (usa o Postgres do docker compose, em um banco separado)
@@ -333,7 +346,7 @@ TEST_DATABASE_URL="postgresql://incrivel:incrivel@localhost:5433/incrivel_test" 
 
 - **Rate limit em memória:** por instância; em produção real usar Redis (Upstash/Vercel KV).
 - **Cache:** páginas são dinâmicas para refletir publicação na hora. Evolução natural: ISR + `revalidatePath` disparado pelo service ao publicar.
-- **Busca:** `ILIKE` em título/resumo. Próximo passo: `tsvector` + índice GIN com dicionário `portuguese`.
+- **Busca:** o stemmer `portuguese` une flexões (votar/votos/vota) mas não derivações (votar ≠ votação). Próximo passo: dicionário de sinônimos ou busca semântica com embeddings (`pgvector`).
 - **Imagens:** capa por URL. Próximo passo: upload para Vercel Blob/S3.
 - **Testes de integração** dos services com banco efêmero (Testcontainers) e E2E (Playwright).
 - **Editor rico** (Markdown/TipTap) e agendamento de publicação.
