@@ -31,4 +31,12 @@ export function db(): Database {
   return instance;
 }
 
+/** Encerra o pool (scripts e testes). Em serverless o runtime cuida disso. */
+export async function closeDb() {
+  const pool = globalForDb.pgPool;
+  instance = null;
+  globalForDb.pgPool = undefined;
+  await pool?.end();
+}
+
 export { schema };

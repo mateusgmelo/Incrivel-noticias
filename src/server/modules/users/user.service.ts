@@ -21,7 +21,7 @@ export const usersService = {
     return { id: user.id, name: user.name, email: user.email, role: user.role };
   },
 
-  list(actor: Actor) {
+  async list(actor: Actor) {
     if (!can.manageUsers(actor)) throw new ForbiddenError();
     return usersRepository.list();
   },

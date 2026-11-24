@@ -303,12 +303,20 @@ Por que duas URLs: a aplicação usa o pooler (muitas funções serverless, pouc
 
 ## Testes
 
-```bash
-npm test
-```
-23 testes unitários cobrindo o que concentra regra de negócio: matriz de permissões, máquina de estados editorial e normalização do agregador RSS. Os fluxos de API foram validados ponta a ponta contra Postgres real (login, RBAC, transições, validação, deduplicação, revogação de acesso).
+Duas camadas, ambas no CI a cada pull request:
 
----
+| Camada | Comando | O que cobre |
+|---|---|---|
+| **Unitários** (27) | `npm test` | Regras puras, sem banco: matriz RBAC, máquina de estados editorial, normalização do RSS, política de SSL |
+| **Integração** (23) | `npm run test:int` | Services contra **Postgres real** com as migrations do projeto: fluxo editorial completo, visibilidade por papel, auditoria, autenticação, gestão de usuários, integridade referencial, busca/paginação e o agregador RSS ponta a ponta (servidor HTTP local servindo feeds) |
+
+```bash
+# integração local (usa o Postgres do docker compose, em um banco separado)
+docker compose exec db createdb -U incrivel incrivel_test
+TEST_DATABASE_URL="postgresql://incrivel:incrivel@localhost:5433/incrivel_test" npm run test:int
+```
+
+> **Trava de segurança:** os testes de integração zeram o banco entre cenários, por isso **se recusam a rodar** se a URL não apontar para um host local — impossível apagar produção por engano.
 
 ## Limitações conhecidas e próximos passos
 
