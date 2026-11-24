@@ -39,8 +39,8 @@ export class ForbiddenError extends AppError {
 }
 
 export class NotFoundError extends AppError {
-  constructor(resource = "Recurso") {
-    super(404, "NOT_FOUND", `${resource} não encontrado`);
+  constructor(resource = "Recurso", gender: "m" | "f" = "m") {
+    super(404, "NOT_FOUND", `${resource} não encontrad${gender === "f" ? "a" : "o"}`);
   }
 }
 

@@ -50,7 +50,7 @@ export const articlesService = {
 
   async getPublished(slug: string) {
     const article = await articlesRepository.findFull({ slug });
-    if (!article || article.status !== "PUBLISHED") throw new NotFoundError("Matéria");
+    if (!article || article.status !== "PUBLISHED") throw new NotFoundError("Matéria", "f");
     return article;
   },
 
@@ -85,7 +85,7 @@ export const articlesService = {
 
   async getForAdmin(actor: Actor, id: string) {
     const article = await articlesRepository.findFull({ id });
-    if (!article) throw new NotFoundError("Matéria");
+    if (!article) throw new NotFoundError("Matéria", "f");
     if (!articlePolicy.canView(actor, article)) throw new ForbiddenError();
     return {
       ...article,
@@ -127,7 +127,7 @@ export const articlesService = {
 
   async update(actor: Actor, id: string, input: ArticleUpdateInput) {
     const current = await articlesRepository.findRef(id);
-    if (!current) throw new NotFoundError("Matéria");
+    if (!current) throw new NotFoundError("Matéria", "f");
     if (!articlePolicy.canEdit(actor, current)) throw new ForbiddenError("Você não pode editar esta matéria no estado atual");
     if (input.categoryId) await ensureCategory(input.categoryId);
 
@@ -149,7 +149,7 @@ export const articlesService = {
 
   async transition(actor: Actor, id: string, action: ArticleAction) {
     const current = await articlesRepository.findRef(id);
-    if (!current) throw new NotFoundError("Matéria");
+    if (!current) throw new NotFoundError("Matéria", "f");
 
     const decision = articlePolicy.canTransition(actor, current, action);
     if (!decision.allowed) {
@@ -174,7 +174,7 @@ export const articlesService = {
 
   async remove(actor: Actor, id: string) {
     const current = await articlesRepository.findRef(id);
-    if (!current) throw new NotFoundError("Matéria");
+    if (!current) throw new NotFoundError("Matéria", "f");
     if (!articlePolicy.canDelete(actor, current)) throw new ForbiddenError("Matérias publicadas devem ser arquivadas, não excluídas");
     await articlesRepository.delete(id);
     await auditService.record({ actorId: actor.id, action: "article.delete", entity: "article", entityId: id, meta: { title: current.title } });
