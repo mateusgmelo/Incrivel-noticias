@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapFeedItem, stripHtml, truncate } from "./ingest.mapper";
+import { isLikelyPhoto, mapFeedItem, stripHtml, truncate } from "./ingest.mapper";
 
 const now = new Date("2026-11-24T12:00:00Z");
 
@@ -51,5 +51,21 @@ describe("helpers de texto", () => {
   });
   it("truncate não corta texto curto", () => {
     expect(truncate("curto", 10)).toBe("curto");
+  });
+});
+
+describe("imagem de capa", () => {
+  const base = { title: "Manchete de teste", link: "https://exemplo.com/a", contentSnippet: "Resumo com tamanho suficiente." };
+
+  it("descarta o logotipo do veículo usado como imagem", () => {
+    const logo = "https://cdn.jsdelivr.net/gh/x/assets-ebc@1.0.0/abr/assets/images/logo-agenciabrasil.svg";
+    expect(mapFeedItem({ ...base, content: `<img src="${logo}">` }, "Agência Brasil")?.coverImageUrl).toBeNull();
+  });
+
+  it("mantém fotos de verdade", () => {
+    const foto = "https://s2.glbimg.com/abc/2026/11/24/foto.jpg";
+    expect(mapFeedItem({ ...base, enclosure: { url: foto, type: "image/jpeg" } }, "g1")?.coverImageUrl).toBe(foto);
+    expect(isLikelyPhoto(foto)).toBe(true);
+    expect(isLikelyPhoto("https://site.com/img/placeholder.png")).toBe(false);
   });
 });

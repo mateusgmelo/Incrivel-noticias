@@ -79,8 +79,12 @@ export default async function ArticlePage({ params }: Props) {
           <span className="font-semibold text-ink">{imported ? article.sourceName : `Por ${article.authorName}`}</span>
           <span>·</span>
           <time dateTime={article.publishedAt?.toISOString()}>{formatDateTime(article.publishedAt)}</time>
-          <span>·</span>
-          <span>{article.views.toLocaleString("pt-BR")} leituras</span>
+          {article.views > 0 && (
+            <>
+              <span>·</span>
+              <span>{article.views.toLocaleString("pt-BR")} {article.views === 1 ? "leitura" : "leituras"}</span>
+            </>
+          )}
         </div>
 
         {article.coverImageUrl && (
