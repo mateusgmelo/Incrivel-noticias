@@ -12,6 +12,16 @@ Portal de notícias com painel editorial, controle de acesso por hierarquia e ag
 > 🔗 **Produção:** https://incrivelnoticias.vercel.app · painel em [/admin](https://incrivelnoticias.vercel.app/admin) · status em [/api/health](https://incrivelnoticias.vercel.app/api/health)
 > 👤 **Contas de demonstração** (senha `Incrivel@2026`): `admin@incrivelnoticias.com` · `editor@incrivelnoticias.com` · `reporter@incrivelnoticias.com`
 
+## Telas
+
+| Capa | Matéria |
+|---|---|
+| ![Capa do portal](docs/screenshots/site-capa.jpg) | ![Página de matéria](docs/screenshots/site-materia.jpg) |
+| **Painel do editor** — contadores por status e fila de revisão | **Revisão** — matéria importada via RSS, com as ações que a policy libera |
+| ![Painel do editor](docs/screenshots/painel-dashboard.jpg) | ![Revisão de matéria](docs/screenshots/painel-revisao.jpg) |
+| **Usuários** (só admin) — papéis e ativação, com proteção contra autorrebaixamento | **Auditoria** (só admin) — quem fez o quê, quando |
+| ![Gestão de usuários](docs/screenshots/painel-usuarios.jpg) | ![Auditoria](docs/screenshots/painel-auditoria.jpg) |
+
 ---
 
 ## Sumário
@@ -135,12 +145,51 @@ scripts/                     migrate.ts, seed.ts
 
 ## Modelo de dados
 
-```
-users ──1:N── articles ──N:1── categories
-                 │
-                 └──N:N── tags   (via article_tags)
+```mermaid
+erDiagram
+    users ||--o{ articles : "escreve"
+    categories ||--o{ articles : "agrupa"
+    articles ||--o{ article_tags : ""
+    tags ||--o{ article_tags : ""
+    users |o--o{ audit_logs : "executa"
 
-audit_logs ──N:1── users (ator, SET NULL ao remover)
+    users {
+        uuid id PK
+        varchar email UK
+        text password_hash
+        enum role "REPORTER | EDITOR | ADMIN"
+        boolean active
+    }
+    categories {
+        uuid id PK
+        varchar name UK
+        varchar slug UK
+    }
+    articles {
+        uuid id PK
+        varchar slug UK
+        enum status "DRAFT | IN_REVIEW | PUBLISHED | ARCHIVED"
+        enum source "ORIGINAL | IMPORTED"
+        text source_url UK "deduplicação RSS"
+        tsvector search_vector "gerada + GIN"
+        timestamptz published_at
+        uuid author_id FK
+        uuid category_id FK
+    }
+    tags {
+        uuid id PK
+        varchar slug UK
+    }
+    article_tags {
+        uuid article_id PK, FK
+        uuid tag_id PK, FK
+    }
+    audit_logs {
+        uuid id PK
+        uuid actor_id FK
+        varchar action
+        jsonb meta
+    }
 ```
 
 | Tabela | Destaques |
@@ -189,10 +238,16 @@ audit_logs ──N:1── users (ator, SET NULL ao remover)
 
 ## Fluxo editorial (máquina de estados)
 
-```
-DRAFT ──submit──► IN_REVIEW ──publish──► PUBLISHED ──archive──► ARCHIVED
-  ▲                   │                      ▲                       │
-  └──────reject───────┘                      └────────publish────────┘
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> DRAFT: criar (qualquer papel)
+    DRAFT --> IN_REVIEW: submit (autor ou editor+)
+    IN_REVIEW --> DRAFT: reject (editor+)
+    DRAFT --> PUBLISHED: publish (editor+)
+    IN_REVIEW --> PUBLISHED: publish (editor+)
+    PUBLISHED --> ARCHIVED: archive (editor+)
+    ARCHIVED --> PUBLISHED: publish (editor+)
 ```
 
 Transições são **endpoints de ação** (`POST /api/admin/articles/:id/publish`), não `PATCH { status }`. Cada ação tem sua regra, fica auditada e retorna `409` com os estados permitidos quando inválida para o estado atual. A tabela de transições está em `article.policy.ts` e é coberta por testes.
