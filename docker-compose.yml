@@ -1,0 +1,62 @@
+# Uso:
+#   Só o banco (desenvolvimento com `npm run dev`):  docker compose up -d db
+#   Stack completa (banco + migrations/seed + app):  docker compose --profile full up --build
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: incrivel-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: incrivel
+      POSTGRES_PASSWORD: incrivel
+      POSTGRES_DB: incrivel
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U incrivel -d incrivel"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  adminer:
+    image: adminer:4
+    container_name: incrivel-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
+  migrate:
+    profiles: ["full"]
+    build:
+      context: .
+      target: builder
+    environment: &app-env
+      DATABASE_URL: postgresql://incrivel:incrivel@db:5432/incrivel?schema=public
+      DIRECT_URL: postgresql://incrivel:incrivel@db:5432/incrivel?schema=public
+      JWT_SECRET: docker-local-secret-docker-local-secret-123
+      CRON_SECRET: docker-local-cron
+      SEED_DEFAULT_PASSWORD: Incrivel@2026
+    command: sh -c "npm run db:migrate && npm run db:seed"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    profiles: ["full"]
+    build:
+      context: .
+      target: runner
+    container_name: incrivel-app
+    environment: *app-env
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
