@@ -64,6 +64,16 @@ function isHttpUrl(value?: string | null): value is string {
   }
 }
 
+/**
+ * Alguns feeds (ex.: Agência Brasil) mandam o logotipo do veículo quando a matéria
+ * não tem foto. Logo não é capa: nesses casos preferimos ficar sem imagem.
+ */
+const NOT_A_PHOTO = /(logo|placeholder|default[-_]?image|sem[-_]?imagem)|\.svg(\?|$)/i;
+
+export function isLikelyPhoto(url: string): boolean {
+  return !NOT_A_PHOTO.test(url);
+}
+
 export function mapFeedItem(item: FeedItem, sourceName: string, now = new Date()): MappedItem | null {
   const title = stripHtml(item.title ?? "");
   const link = item.link?.trim();
@@ -84,7 +94,7 @@ export function mapFeedItem(item: FeedItem, sourceName: string, now = new Date()
     excerpt,
     sourceUrl: link,
     sourceName,
-    coverImageUrl: isHttpUrl(image) ? image : null,
+    coverImageUrl: isHttpUrl(image) && isLikelyPhoto(image) ? image : null,
     publishedAt: Number.isNaN(date.getTime()) || date > now ? now : date,
   };
 }
