@@ -22,9 +22,10 @@ Portal de notícias com painel editorial, controle de acesso por hierarquia e ag
 5. [Fluxo editorial](#fluxo-editorial-máquina-de-estados)
 6. [API](#api)
 7. [Agregador RSS](#agregador-rss)
-8. [Deploy](#deploy-vercel--neon)
-9. [Decisões técnicas](#decisões-técnicas)
-10. [Limitações conhecidas e próximos passos](#limitações-conhecidas-e-próximos-passos)
+8. [SEO e distribuição](#seo-e-distribuição)
+9. [Deploy](#deploy-vercel--neon)
+10. [Decisões técnicas](#decisões-técnicas)
+11. [Limitações conhecidas e próximos passos](#limitações-conhecidas-e-próximos-passos)
 
 ---
 
@@ -260,6 +261,16 @@ Fontes em `src/server/modules/ingest/ingest.sources.ts`, sobrescrevíveis sem de
 
 ---
 
+## SEO e distribuição
+
+Um portal de notícias vive de ser encontrado:
+
+- **`/sitemap.xml`** dinâmico: capa, editorias e matérias próprias publicadas (com `lastModified`)
+- **`/robots.txt`**: libera o site, bloqueia `/admin` e `/api/`, aponta o sitemap
+- **Dados estruturados `NewsArticle`** (JSON-LD) em cada matéria — o formato que buscadores usam para resultados de notícia
+- **`/feed.xml`**: feed RSS 2.0 do próprio portal, anunciado via `<link rel="alternate">`. Testado em ida e volta: o XML gerado é lido pelo **mesmo agregador** do projeto
+- Open Graph / Twitter Cards por matéria, `canonical` correto (manchetes agregadas apontam para a fonte original e ficam fora do sitemap e do feed)
+
 ## Deploy (Vercel + Neon)
 
 A Vercel é serverless e não executa containers nem bancos, então o Docker cobre o ambiente local/portável e o Postgres de produção é o **Neon** (gerenciado, mesmo motor do ambiente local).
@@ -307,7 +318,7 @@ Duas camadas, ambas no CI a cada pull request:
 
 | Camada | Comando | O que cobre |
 |---|---|---|
-| **Unitários** (27) | `npm test` | Regras puras, sem banco: matriz RBAC, máquina de estados editorial, normalização do RSS, política de SSL |
+| **Unitários** (30) | `npm test` | Regras puras, sem banco: matriz RBAC, máquina de estados editorial, normalização do RSS, geração do feed, política de SSL |
 | **Integração** (23) | `npm run test:int` | Services contra **Postgres real** com as migrations do projeto: fluxo editorial completo, visibilidade por papel, auditoria, autenticação, gestão de usuários, integridade referencial, busca/paginação e o agregador RSS ponta a ponta (servidor HTTP local servindo feeds) |
 
 ```bash

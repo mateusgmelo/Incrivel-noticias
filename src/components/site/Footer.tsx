@@ -13,6 +13,7 @@ export function Footer() {
           <ul className="mt-2 space-y-1">
             <li><Link href="/busca" className="hover:text-ink">Buscar</Link></li>
             <li><Link href="/admin" className="hover:text-ink">Área do jornalista</Link></li>
+            <li><a href="/feed.xml" className="hover:text-ink">Feed RSS</a></li>
             <li><a href="/api/health" className="hover:text-ink">Status da API</a></li>
           </ul>
         </div>
