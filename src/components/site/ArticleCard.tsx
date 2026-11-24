@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ArticleCard as Card } from "@/server/modules/articles/article.repository";
 import { timeAgo } from "@/lib/format";
+import { CoverImage } from "./CoverImage";
 
 type Variant = "hero" | "default" | "compact" | "list";
 
@@ -11,6 +12,7 @@ export function ArticleCard({ article, variant = "default" }: { article: Card; v
       {article.categoryName}
     </Link>
   );
+  const coverLabel = article.source === "IMPORTED" && article.sourceName ? article.sourceName : article.categoryName;
   const meta = (
     <p className="text-xs text-muted">
       {article.source === "IMPORTED" ? `via ${article.sourceName}` : article.authorName} · {timeAgo(article.publishedAt)}
@@ -21,10 +23,7 @@ export function ArticleCard({ article, variant = "default" }: { article: Card; v
     return (
       <article className="group">
         <Link href={href} className="block overflow-hidden rounded-lg bg-line">
-          {article.coverImageUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={article.coverImageUrl} alt="" className="aspect-[16/9] w-full object-cover transition duration-300 group-hover:scale-[1.02]" />
-          )}
+          <CoverImage src={article.coverImageUrl} label={coverLabel} className="transition duration-300 group-hover:scale-[1.02]" />
         </Link>
         <div className="mt-4 space-y-2">
           {kicker}
@@ -74,10 +73,7 @@ export function ArticleCard({ article, variant = "default" }: { article: Card; v
   return (
     <article className="group space-y-2">
       <Link href={href} className="block overflow-hidden rounded-md bg-line">
-        {article.coverImageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={article.coverImageUrl} alt="" loading="lazy" className="aspect-[16/9] w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
-        )}
+        <CoverImage src={article.coverImageUrl} label={coverLabel} className="transition duration-300 group-hover:scale-[1.03]" />
       </Link>
       {kicker}
       <h3 className="headline text-lg font-bold leading-snug">
