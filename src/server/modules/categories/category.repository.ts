@@ -30,6 +30,13 @@ export const categoriesRepository = {
     return row ?? null;
   },
 
+  /** Cria se não existir (seguro sob concorrência: ON CONFLICT no slug) e devolve o id. */
+  ensure: async (data: typeof categories.$inferInsert) => {
+    await db().insert(categories).values(data).onConflictDoNothing();
+    const [row] = await db().select({ id: categories.id }).from(categories).where(eq(categories.slug, data.slug)).limit(1);
+    return row.id;
+  },
+
   insert: async (data: typeof categories.$inferInsert) => {
     const [row] = await db().insert(categories).values(data).returning();
     return row;

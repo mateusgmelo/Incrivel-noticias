@@ -14,6 +14,10 @@ export type FeedItem = {
   pubDate?: string;
   enclosure?: { url?: string; type?: string };
   media?: { $?: { url?: string } };
+  /** Campo próprio da Agência Brasil com a foto principal. */
+  imagemDestaque?: string;
+  /** dc:creator — crédito do autor. */
+  creator?: string;
 };
 
 export type MappedItem = {
@@ -83,10 +87,9 @@ export function mapFeedItem(item: FeedItem, sourceName: string, now = new Date()
   const summary = truncate(stripHtml(rawSummary || title));
   const excerpt = summary.length >= 20 ? summary : truncate(`${title}. Leia a matéria completa na fonte.`);
 
-  const image =
-    (item.enclosure?.type?.startsWith("image") || !item.enclosure?.type ? item.enclosure?.url : undefined) ??
-    item.media?.$?.url ??
-    firstImage(item.content);
+  const enclosureImage =
+    item.enclosure?.type?.startsWith("image") || !item.enclosure?.type ? item.enclosure?.url : undefined;
+  const image = item.imagemDestaque?.trim() || enclosureImage || item.media?.$?.url || firstImage(item.content);
 
   const date = new Date(item.isoDate ?? item.pubDate ?? now);
   return {
