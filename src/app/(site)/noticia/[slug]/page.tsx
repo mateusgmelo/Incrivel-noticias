@@ -7,13 +7,13 @@ import { ViewTracker } from "@/components/site/ViewTracker";
 import { formatDateTime } from "@/lib/format";
 import { SITE_NAME, siteUrl } from "@/lib/site";
 import { NotFoundError } from "@/server/core/http/errors";
-import { articlesService } from "@/server/modules/articles/article.service";
+import { publicContent } from "@/server/modules/articles/article.public";
 
 type Props = { params: Promise<{ slug: string }> };
 
 async function load(slug: string) {
   try {
-    return await articlesService.getPublished(slug);
+    return await publicContent.article(slug);
   } catch (err) {
     if (err instanceof NotFoundError) notFound();
     throw err;
@@ -40,7 +40,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ArticlePage({ params }: Props) {
   const { slug } = await params;
   const article = await load(slug);
-  const related = await articlesService.related(article);
+  const related = await publicContent.related(article.id, article.categorySlug);
   const imported = article.source === "IMPORTED";
 
   // Dados estruturados (schema.org/NewsArticle): o que buscadores usam para rich results de notícia.

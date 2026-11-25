@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { categoriesService } from "@/server/modules/categories/category.service";
+import { publicContent } from "@/server/modules/articles/article.public";
 
 export async function Header() {
   // Menu só com editorias que têm matéria no ar (sem links para páginas vazias).
-  const categories = (await categoriesService.list()).filter((c) => c.publishedCount > 0);
+  const categories = (await publicContent.categories()).filter((c) => c.publishedCount > 0);
   const today = new Intl.DateTimeFormat("pt-BR", {
     weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "America/Recife",
   }).format(new Date());

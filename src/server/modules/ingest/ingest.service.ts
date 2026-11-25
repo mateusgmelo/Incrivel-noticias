@@ -5,6 +5,7 @@ import { ForbiddenError } from "@/server/core/http/errors";
 import { randomSuffix, slugify } from "@/server/core/utils/slug";
 import { db } from "@/server/db/client";
 import { users } from "@/server/db/schema";
+import { invalidateContent } from "@/server/core/cache/content-cache";
 import { auditService } from "@/server/modules/audit/audit.service";
 import { articlesRepository } from "@/server/modules/articles/article.repository";
 import { categoriesRepository } from "@/server/modules/categories/category.repository";
@@ -143,6 +144,7 @@ export const ingestService = {
       failedSources: results.filter((r) => r.error).length,
       results,
     };
+    if (summary.created) invalidateContent();
     await auditService.record({ actorId: authorId, action: "ingest.run", entity: "ingest", meta: { created: summary.created, published: summary.published, skipped: summary.skipped, blocked: summary.blocked, failedSources: summary.failedSources } });
     return summary;
   },

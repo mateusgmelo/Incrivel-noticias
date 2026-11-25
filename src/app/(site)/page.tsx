@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { ArticleCard } from "@/components/site/ArticleCard";
-import { articlesService } from "@/server/modules/articles/article.service";
+import { publicContent } from "@/server/modules/articles/article.public";
 
 export default async function HomePage() {
-  const { featured, latest, mostRead } = await articlesService.homepage();
+  const { featured, latest, mostRead } = await publicContent.homepage();
   // Topo sempre com 3 matérias: destaques marcados pelo editor primeiro, completando com as mais recentes.
   const top = [...featured, ...latest.filter((a) => !featured.some((f) => f.id === a.id))].slice(0, 3);
   const [hero, ...secondary] = top;

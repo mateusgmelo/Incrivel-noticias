@@ -7,6 +7,7 @@ import { can } from "@/server/core/auth/rbac";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/server/core/http/errors";
 import { offsetOf, pageMeta, type Pagination } from "@/server/core/http/pagination";
 import { randomSuffix, slugify } from "@/server/core/utils/slug";
+import { invalidateContent } from "@/server/core/cache/content-cache";
 import { auditService } from "@/server/modules/audit/audit.service";
 import { categoriesRepository } from "@/server/modules/categories/category.repository";
 import { articlePolicy, TRANSITIONS, type ArticleAction } from "./article.policy";
@@ -122,6 +123,7 @@ export const articlesService = {
     });
     if (tags?.length) await articlesRepository.setTags(created.id, tags);
     await auditService.record({ actorId: actor.id, action: "article.create", entity: "article", entityId: created.id });
+    invalidateContent();
     return created;
   },
 
@@ -144,6 +146,7 @@ export const articlesService = {
     await auditService.record({
       actorId: actor.id, action: "article.update", entity: "article", entityId: id, meta: { fields: Object.keys(input) },
     });
+    invalidateContent();
     return updated;
   },
 
@@ -169,6 +172,7 @@ export const articlesService = {
     await auditService.record({
       actorId: actor.id, action: `article.${action}`, entity: "article", entityId: id, meta: { from: current.status, to },
     });
+    invalidateContent();
     return updated;
   },
 
@@ -178,5 +182,6 @@ export const articlesService = {
     if (!articlePolicy.canDelete(actor, current)) throw new ForbiddenError("Matérias publicadas devem ser arquivadas, não excluídas");
     await articlesRepository.delete(id);
     await auditService.record({ actorId: actor.id, action: "article.delete", entity: "article", entityId: id, meta: { title: current.title } });
+    invalidateContent();
   },
 };

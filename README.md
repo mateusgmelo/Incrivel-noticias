@@ -5,7 +5,7 @@
 ![Next.js](https://img.shields.io/badge/Next.js-15-000?logo=next.js)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 
-Portal de notícias com painel editorial, controle de acesso por hierarquia e agregador de manchetes via RSS.
+Portal de notícias com painel editorial, controle de acesso por hierarquia e agregador que publica notícias reais respeitando a licença de cada fonte. Nenhum conteúdo é inventado.
 
 **Stack:** Next.js 15 (App Router) · TypeScript · PostgreSQL 16 · Drizzle ORM · Zod · JWT (jose) · Tailwind CSS 4 · Vitest · Docker · Vercel + Neon
 
@@ -31,12 +31,14 @@ Portal de notícias com painel editorial, controle de acesso por hierarquia e ag
 4. [Hierarquia de acesso (RBAC)](#hierarquia-de-acesso-rbac)
 5. [Fluxo editorial](#fluxo-editorial-máquina-de-estados)
 6. [API](#api)
-7. [Agregador RSS](#agregador-rss)
+7. [Agregador de notícias](#agregador-de-notícias)
 8. [Busca full-text](#busca-full-text)
 9. [SEO e distribuição](#seo-e-distribuição)
 10. [Deploy](#deploy-vercel--neon)
-11. [Decisões técnicas](#decisões-técnicas)
-12. [Limitações conhecidas e próximos passos](#limitações-conhecidas-e-próximos-passos)
+11. [Cache](#cache)
+12. [Decisões técnicas](#decisões-técnicas)
+13. [Como este sistema escala](#como-este-sistema-escala)
+14. [Limitações conhecidas e próximos passos](#limitações-conhecidas-e-próximos-passos)
 
 ---
 
@@ -384,6 +386,19 @@ Por que duas URLs: a aplicação usa o pooler (muitas funções serverless, pouc
 
 ---
 
+## Cache
+
+As leituras públicas (capa, matéria, editoria, tag e menu) passam por `publicContent` (`article.public.ts`), que usa o **Data Cache do Next**. Na Vercel, esse cache é compartilhado entre todas as instâncias.
+
+- **Invalidação por evento, não por tempo:** os services chamam `invalidateContent()` ao publicar, editar, arquivar, excluir, mexer em editoria ou importar notícias. A mudança aparece na visita seguinte.
+- **Medido localmente:** com o cache quente, 40 visitas (capa e matéria) geraram **0 consultas** ao Postgres. Antes eram 4 por visita.
+- **Resiliência:** com o banco fora do ar, a capa em cache continua respondendo.
+- **Services continuam puros:** o cache fica na borda, nas páginas. Painel, API e testes leem direto do banco.
+- **Busca fica fora do cache de propósito:** cada termo é único e só encheria o cache sem reaproveitamento.
+- **Rede de segurança:** revalidação a cada 10 minutos, para o que não dispara evento (contador de leituras).
+
+---
+
 ## Decisões técnicas
 
 | Decisão | Motivo |
@@ -395,8 +410,28 @@ Por que duas URLs: a aplicação usa o pooler (muitas funções serverless, pouc
 | **JWT próprio (jose) em cookie httpOnly** | ~100 linhas, sem caixa-preta, funciona no Edge (middleware). |
 | **Policy pura separada do service** | Autorização testável sem banco; mesma fonte para API e UI. |
 | **Transições como ações** | Cada mudança de estado tem regra, auditoria e erro próprios. |
-| **Renderização dinâmica** | Publicar no painel reflete imediatamente no site. |
+| **Cache com invalidação por evento** | Leitor a mais não vira consulta a mais; publicar reflete na visita seguinte. Melhor que tempo fixo (ISR), que mostraria conteúdo velho por minutos. |
 | **UUID como PK** | IDs não enumeráveis em URLs do painel. |
+
+---
+
+## Como este sistema escala
+
+A arquitetura atual (monólito modular na Vercel e Postgres gerenciado no Neon, com pooler) atende com folga um portal regional. Para cada tipo de crescimento, já se sabe o que cede primeiro e qual é o próximo passo, sem reescrever o sistema:
+
+| Crescimento | O que cede primeiro | Próximo passo |
+|---|---|---|
+| Leitores | ✅ já resolvido: cache com invalidação por evento | CDN para o HTML (`s-maxage`) |
+| Escritas de leitura (views) | um `UPDATE` por visita na matéria mais lida | contador em Redis, gravado no banco em lote a cada minuto |
+| Volume de matérias | paginação por `OFFSET` fica lenta em páginas profundas | paginação por cursor (`published_at`, `id`) na API pública |
+| Busca | FTS do Postgres atende bem até milhões de linhas | Meilisearch/Elasticsearch, ou embeddings com `pgvector` |
+| Fontes no agregador | uma requisição de até 60s faz tudo | fila com um job por fonte e retentativas (Inngest/QStash) |
+| Imagens | capas linkadas de sites externos | upload para object storage (Vercel Blob/S3) + `next/image` |
+| Login | ✅ já resolvido: rate limit no Postgres, válido entre instâncias | Redis quando o volume justificar |
+| Operação | logs em `console` | logs estruturados com `requestId`, Sentry e métricas |
+| Mudanças de schema | migration roda antes do build | migrations *expand/contract*: o schema novo sempre compatível com o código anterior |
+
+O backend isolado em `src/server`, com módulos que não dependem de HTTP, permite extrair um módulo (por exemplo, o agregador) para um serviço próprio sem reescrever as regras.
 
 ---
 
@@ -406,8 +441,8 @@ Duas camadas, ambas no CI a cada pull request:
 
 | Camada | Comando | O que cobre |
 |---|---|---|
-| **Unitários** (30) | `npm test` | Regras puras, sem banco: matriz RBAC, máquina de estados editorial, normalização do RSS, geração do feed, política de SSL |
-| **Integração** (30) | `npm run test:int` | Services contra **Postgres real** com as migrations do projeto: fluxo editorial completo, visibilidade por papel, auditoria, autenticação, gestão de usuários, integridade referencial, busca full-text (acentos, radicais, ranking, sintaxe, entrada maliciosa), paginação e o agregador RSS ponta a ponta (servidor HTTP local servindo feeds) |
+| **Unitários** (42) | `npm test` | Regras puras, sem banco: matriz RBAC, máquina de estados editorial, normalização do RSS, extração de texto e travas de licença (com uma matéria real como fixture), geração do feed, política de SSL, restauração de datas do cache |
+| **Integração** (37) | `npm run test:int` | Services contra **Postgres real** com as migrations do projeto: fluxo editorial completo, rate limit atômico sob concorrência, agregador em modo licenciado (bloqueio de agência parceira e de "proibida a reprodução"), visibilidade por papel, auditoria, autenticação, gestão de usuários, integridade referencial, busca full-text (acentos, radicais, ranking, sintaxe, entrada maliciosa), paginação e o agregador RSS ponta a ponta (servidor HTTP local servindo feeds) |
 
 ```bash
 # integração local (usa o Postgres do docker compose, em um banco separado)
@@ -419,9 +454,8 @@ TEST_DATABASE_URL="postgresql://incrivel:incrivel@localhost:5433/incrivel_test" 
 
 ## Limitações conhecidas e próximos passos
 
-- **Cache:** páginas são dinâmicas para refletir publicação na hora. Evolução natural: ISR + `revalidatePath` disparado pelo service ao publicar.
 - **Busca:** o stemmer `portuguese` une flexões (votar/votos/vota) mas não derivações (votar ≠ votação). Próximo passo: dicionário de sinônimos ou busca semântica com embeddings (`pgvector`).
-- **Imagens:** capa por URL. Próximo passo: upload para Vercel Blob/S3.
+- **Imagens:** capa por URL. A foto da matéria em destaque está em `public/destaques` só porque ainda não há upload. Conteúdo editorial não deveria morar no repositório. Próximo passo: upload para Vercel Blob/S3.
 - **Extração de texto:** depende do HTML que a Agência Brasil manda no feed. Se o formato mudar, a matéria cai automaticamente para o modo manchete (com revisão), em vez de quebrar.
 - **Testes E2E** (Playwright).
 - **Editor rico** (Markdown/TipTap) e agendamento de publicação.
