@@ -1,3 +1,4 @@
+// Busca não usa cache: cada termo é único e encheria o cache sem reaproveitamento.
 import type { Metadata } from "next";
 import { ArticleList } from "@/components/site/ArticleList";
 import { PublicListQuery } from "@/server/modules/articles/article.schema";
