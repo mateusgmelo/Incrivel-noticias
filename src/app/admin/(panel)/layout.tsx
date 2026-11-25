@@ -2,7 +2,7 @@ import Link from "next/link";
 import { LogoutButton } from "@/components/admin/LogoutButton";
 import { NavLink } from "@/components/admin/NavLink";
 import { can, ROLE_LABEL } from "@/server/core/auth/rbac";
-import { requireUser } from "@/server/core/auth/session";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const metadata = { robots: { index: false } };

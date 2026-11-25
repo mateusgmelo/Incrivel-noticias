@@ -1,5 +1,5 @@
 import { ArticleForm } from "@/components/admin/ArticleForm";
-import { requireUser } from "@/server/core/auth/session";
+import { requireUser } from "@/lib/auth";
 import { articlePolicy } from "@/server/modules/articles/article.policy";
 import { categoriesService } from "@/server/modules/categories/category.service";
 

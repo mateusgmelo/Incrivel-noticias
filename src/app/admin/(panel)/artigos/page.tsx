@@ -3,7 +3,7 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import { Pagination } from "@/components/site/Pagination";
 import { formatDateTime, STATUS_LABEL } from "@/lib/format";
 import { can } from "@/server/core/auth/rbac";
-import { requireUser } from "@/server/core/auth/session";
+import { requireUser } from "@/lib/auth";
 import { AdminListQuery } from "@/server/modules/articles/article.schema";
 import { articlesService } from "@/server/modules/articles/article.service";
 

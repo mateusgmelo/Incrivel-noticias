@@ -1,5 +1,5 @@
 import { formatDateTime } from "@/lib/format";
-import { requireUser } from "@/server/core/auth/session";
+import { requireUser } from "@/lib/auth";
 import { auditService } from "@/server/modules/audit/audit.service";
 
 export default async function AuditPage() {

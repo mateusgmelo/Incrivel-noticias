@@ -4,7 +4,7 @@ import { ArticleActions } from "@/components/admin/ArticleActions";
 import { ArticleForm } from "@/components/admin/ArticleForm";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { formatDateTime } from "@/lib/format";
-import { requireUser } from "@/server/core/auth/session";
+import { requireUser } from "@/lib/auth";
 import { ForbiddenError, NotFoundError } from "@/server/core/http/errors";
 import { articlesService } from "@/server/modules/articles/article.service";
 import { categoriesService } from "@/server/modules/categories/category.service";

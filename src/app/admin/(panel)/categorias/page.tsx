@@ -1,5 +1,5 @@
 import { CategoryManager } from "@/components/admin/CategoryManager";
-import { requireUser } from "@/server/core/auth/session";
+import { requireUser } from "@/lib/auth";
 import { categoriesService } from "@/server/modules/categories/category.service";
 
 export default async function CategoriesPage() {
