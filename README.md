@@ -83,6 +83,16 @@ Todo push e pull request roda no GitHub Actions: **lint → typecheck → testes
 
 O backend vive em `src/server/`, **isolado do framework**. As rotas em `src/app/api` são cascas finas que declaram o contrato e delegam ao service. Isso torna o domínio testável sem HTTP e extraível para outro runtime (ex.: NestJS/Express) sem reescrita.
 
+**Por que front e back no mesmo repositório (monólito modular):** um portal de notícias precisa de SSR para SEO, e um único deploy elimina CORS, versionamento de API entre dois projetos e latência de uma chamada extra a cada página. A separação que importa é a **lógica**, e ela é **garantida por ferramenta**, não só por convenção:
+
+| Fronteira | Como é garantida |
+|---|---|
+| O back-end não conhece o front-end | ESLint (`no-restricted-imports`): `src/server` não pode importar React, páginas, componentes nem `src/lib`. O lint falha no CI. |
+| Banco e segredos nunca chegam ao navegador | `import "server-only"` em `db/client.ts`: se um componente de cliente importar o banco, mesmo indiretamente, **o build falha**. |
+| Adaptadores de UI ficam na UI | redirecionar para o login e memoizar o usuário por renderização ficam em `src/lib/auth.ts`, não no back-end. |
+
+Se o produto crescer a ponto de pedir um serviço separado, `src/server` sai inteiro para um projeto próprio (Express/Nest) e as páginas passam a chamar a API.
+
 ```
 Requisição HTTP
       │
