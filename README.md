@@ -48,7 +48,8 @@ Pré-requisitos: Node 20+ e Docker.
 cp .env.example .env         # valores padrão já apontam para o Postgres do docker compose
 npm install
 npm run db:up                # sobe Postgres 16 (+ Adminer em http://localhost:8080)
-npm run db:setup             # aplica migrations + popula dados de demonstração
+npm run db:setup             # aplica migrations + cria usuários de demonstração e editorias
+npm run ingest               # importa notícias reais (Agência Brasil + manchetes do g1)
 npm run dev                  # http://localhost:3000  |  painel: /admin
 ```
 
@@ -70,7 +71,8 @@ Todo push e pull request roda no GitHub Actions: **lint → typecheck → testes
 | `npm run typecheck` / `lint` | TypeScript estrito e ESLint |
 | `npm run db:generate` | Gera nova migration SQL a partir do schema |
 | `npm run db:migrate` | Aplica migrations pendentes |
-| `npm run db:seed` | Popula dados de demonstração (idempotente) |
+| `npm run db:seed` | Cria os 3 usuários de demonstração e as editorias (idempotente) |
+| `npm run ingest` | Roda o agregador (o mesmo código do painel e do cron) |
 | `npm run db:studio` | Drizzle Studio (GUI do banco) |
 
 ---
@@ -298,22 +300,38 @@ curl -b s.txt 'localhost:3000/api/admin/articles?status=IN_REVIEW'
 
 ---
 
-## Agregador RSS
+## Agregador de notícias
 
-Diferencial do projeto: importa manchetes de outros portais para curadoria editorial.
+O portal **não tem conteúdo inventado**: tudo o que aparece no site veio de fontes reais ou foi escrito pela redação no painel.
 
 **Por que RSS e não scraping de HTML:** RSS é a interface que os próprios veículos publicam para consumo por terceiros. É estável (não quebra quando o site muda o layout), leve e não tem ambiguidade de uso.
 
-**Política de conteúdo — deliberada:** armazenamos **apenas** título, o resumo que a própria fonte publica no feed, link e nome da fonte. **O corpo das matérias nunca é copiado.** Na página, a matéria importada exibe a atribuição e um botão para ler na fonte, e o `<link rel="canonical">` aponta para o original. Copiar texto integral de outro veículo seria violação de direito autoral; agregar manchete + link é a prática de agregadores legítimos.
+### Licença por fonte
 
-**Fluxo:**
-1. Editor clica em "Importar manchetes" no painel (ou o Vercel Cron dispara diariamente).
-2. As fontes são lidas **em paralelo**; falha de uma não afeta as outras (resultado por fonte).
-3. Cada item passa por `mapFeedItem` (função pura, testada): remove HTML, limita resumo a 280 caracteres, valida URL, corrige datas futuras.
-4. `INSERT … ON CONFLICT (source_url) DO NOTHING` → **idempotente**: rodar 10 vezes não duplica nada.
-5. Entra como `IMPORTED` + `IN_REVIEW` na categoria "Giro de Notícias": nada vai ao ar sem um editor aprovar.
+Cada fonte declara o que a **licença** dela permite (`ingest.sources.ts`):
 
-Fontes em `src/server/modules/ingest/ingest.sources.ts`, sobrescrevíveis sem deploy de código via `INGEST_FEEDS="Nome|https://url,Outro|https://url"`.
+| Modo | Fonte | O que guardamos | Vai ao ar |
+|---|---|---|---|
+| `full` | Agência Brasil (10 editorias) | texto integral, foto, crédito do repórter, link para o original | direto (`autoPublish`) |
+| `headline` | g1 Pernambuco, g1 Economia | só título, resumo do feed, foto de capa e link | após aprovação do editor |
+
+A Agência Brasil é uma agência pública cuja [política de reprodução](https://agenciabrasil.ebc.com.br/sobre) autoriza republicar o conteúdo com indicação da fonte, **exceto** material de agências parceiras. Por isso o modo `full` tem duas travas:
+- texto assinado por quem **não** é da própria agência (ex.: "Repórter da Reuters") não é importado;
+- texto com o aviso "proibida a reprodução/republicação" não é importado.
+
+O resultado de cada execução informa quantas matérias foram **publicadas**, quantas foram para **revisão**, quantas **já existiam** e quantas ficaram **fora da licença**.
+
+Conteúdo de veículos comerciais (g1) nunca tem o corpo copiado: a página mostra a atribuição, um botão para ler na fonte, e o `<link rel="canonical">` aponta para o original.
+
+### Fluxo
+1. Disparo pelo painel ("Importar notícias"), por `npm run ingest`, pelo Vercel Cron (diário) ou pelo GitHub Actions (a cada 30 min).
+2. As fontes são lidas **em paralelo**; a falha de uma não afeta as outras.
+3. `mapFeedItem` (função pura) normaliza título, resumo, data e foto. Logotipos usados como "foto" são descartados.
+4. No modo `full`, `htmlToBody` (função pura, testada com uma matéria real salva como fixture) converte o HTML do feed em **texto**: parágrafos, intertítulos e listas. Logo, pixel de rastreio, script e o bloco "Notícias relacionadas" ficam de fora. O HTML de terceiros nunca é renderizado.
+5. A editoria vem da URL da matéria (`/economia/noticia/...` → Economia).
+6. `INSERT … ON CONFLICT (source_url) DO NOTHING` → **idempotente**: rodar 10 vezes não duplica nada.
+
+Fontes sobrescrevíveis sem deploy via `INGEST_FEEDS="Nome|url[|full][|auto],..."`. O padrão é o modo seguro (`headline`, com revisão).
 
 ---
 
@@ -355,7 +373,7 @@ A Vercel é serverless e não executa containers nem bancos, então o Docker cob
 | `NEXT_PUBLIC_SITE_URL` | URL pública do deploy |
 
 3. O script `vercel-build` aplica as migrations pendentes **antes** do build — cada deploy deixa o schema em dia automaticamente.
-4. Seed (uma vez), da sua máquina, apontando para o Neon:
+4. Seed (uma vez), da sua máquina, apontando para o Neon. Ele cria só os usuários e as editorias; as matérias chegam pelo agregador:
    ```bash
    DATABASE_URL="<direct>" DIRECT_URL="<direct>" npm run db:seed
    ```
@@ -403,5 +421,6 @@ TEST_DATABASE_URL="postgresql://incrivel:incrivel@localhost:5433/incrivel_test" 
 - **Cache:** páginas são dinâmicas para refletir publicação na hora. Evolução natural: ISR + `revalidatePath` disparado pelo service ao publicar.
 - **Busca:** o stemmer `portuguese` une flexões (votar/votos/vota) mas não derivações (votar ≠ votação). Próximo passo: dicionário de sinônimos ou busca semântica com embeddings (`pgvector`).
 - **Imagens:** capa por URL. Próximo passo: upload para Vercel Blob/S3.
-- **Testes de integração** dos services com banco efêmero (Testcontainers) e E2E (Playwright).
+- **Extração de texto:** depende do HTML que a Agência Brasil manda no feed. Se o formato mudar, a matéria cai automaticamente para o modo manchete (com revisão), em vez de quebrar.
+- **Testes E2E** (Playwright).
 - **Editor rico** (Markdown/TipTap) e agendamento de publicação.
