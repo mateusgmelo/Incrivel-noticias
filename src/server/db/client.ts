@@ -1,3 +1,6 @@
+// Guard de build: se algum componente de cliente importar (direta ou indiretamente) o banco,
+// o build falha. A conexão com o Postgres nunca chega ao navegador.
+import "server-only";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { env } from "@/server/core/config/env";

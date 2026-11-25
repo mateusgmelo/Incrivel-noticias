@@ -1,5 +1,5 @@
 import { UserManager } from "@/components/admin/UserManager";
-import { requireUser } from "@/server/core/auth/session";
+import { requireUser } from "@/lib/auth";
 import { usersService } from "@/server/modules/users/user.service";
 
 export default async function UsersPage() {

@@ -3,7 +3,7 @@ import { IngestButton } from "@/components/admin/IngestButton";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { formatDateTime, STATUS_LABEL } from "@/lib/format";
 import { can } from "@/server/core/auth/rbac";
-import { requireUser } from "@/server/core/auth/session";
+import { requireUser } from "@/lib/auth";
 import { articlesService } from "@/server/modules/articles/article.service";
 import type { ArticleStatus } from "@/server/db/schema";
 
