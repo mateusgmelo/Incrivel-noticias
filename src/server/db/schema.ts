@@ -194,3 +194,13 @@ export type NewArticle = typeof articles.$inferInsert;
 export type Tag = typeof tags.$inferSelect;
 export type Role = (typeof roleEnum.enumValues)[number];
 export type ArticleStatus = (typeof articleStatusEnum.enumValues)[number];
+
+/**
+ * Rate limit compartilhado entre instâncias (serverless não tem memória comum).
+ * Janela fixa por chave; atualização atômica em um único UPSERT.
+ */
+export const rateLimits = pgTable("rate_limits", {
+  key: varchar("key", { length: 300 }).primaryKey(),
+  count: integer("count").notNull(),
+  resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+});

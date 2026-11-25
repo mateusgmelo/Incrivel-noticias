@@ -231,7 +231,8 @@ erDiagram
 - **Defesa em camadas:** middleware (sessão) → `withRoute` (papel mínimo) → `policy` (regra fina por recurso).
 - **Revogação imediata:** o JWT prova identidade, mas papel e `active` são relidos do banco a cada requisição. Desativar ou rebaixar alguém tem efeito na hora.
 - Admin não pode desativar nem rebaixar a própria conta (evita "trancar" o sistema).
-- Login com tempo constante para e-mail inexistente (anti-enumeração) e rate limit.
+- Login com tempo constante para e-mail inexistente (anti-enumeração).
+- **Rate limit no Postgres:** 5 tentativas/min por conta e 20 a cada 15 min por IP. O contador é uma linha por chave, atualizada num único `UPSERT` atômico. Em memória não funcionaria na Vercel, onde cada request pode cair numa instância diferente. Resposta `429` com cabeçalho `Retry-After`. Teste de integração dispara 20 requisições simultâneas e confirma que exatamente 5 passam.
 - Cookie `httpOnly` + `SameSite=Lax` + `Secure` em produção; mutações exigem `application/json` (mitiga CSRF por formulário).
 - `password_hash` nunca sai do repository.
 - A UI do painel é montada pelas **mesmas** funções de permissão da API — o botão só aparece se a API vai aceitar.
@@ -417,7 +418,6 @@ TEST_DATABASE_URL="postgresql://incrivel:incrivel@localhost:5433/incrivel_test" 
 
 ## Limitações conhecidas e próximos passos
 
-- **Rate limit em memória:** por instância; em produção real usar Redis (Upstash/Vercel KV).
 - **Cache:** páginas são dinâmicas para refletir publicação na hora. Evolução natural: ISR + `revalidatePath` disparado pelo service ao publicar.
 - **Busca:** o stemmer `portuguese` une flexões (votar/votos/vota) mas não derivações (votar ≠ votação). Próximo passo: dicionário de sinônimos ou busca semântica com embeddings (`pgvector`).
 - **Imagens:** capa por URL. Próximo passo: upload para Vercel Blob/S3.
