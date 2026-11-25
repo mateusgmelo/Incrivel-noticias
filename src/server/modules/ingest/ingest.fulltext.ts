@@ -16,6 +16,8 @@ const SKIP_HEADING = /^(notícias relacionadas|leia também|veja também|saiba m
 
 const MIN_BODY = 200;
 
+const BLOCK_SELECTOR = "p, h1, h2, h3, h4, ul, ol, blockquote, div, section";
+
 const squash = (s: string) =>
   s
     .replace(/ /g, " ")
@@ -82,7 +84,9 @@ export function htmlToBody(html: string): string | null {
         continue;
       }
 
-      if (tag === "blockquote" || tag === "div" || tag === "section") {
+      // Contêineres, e também qualquer tag que embrulhe blocos: o feed real manda
+      // <p><h3>Notícias relacionadas:</h3><ul>…</ul></p>, que um parser leniente mantém aninhado.
+      if (tag === "blockquote" || tag === "div" || tag === "section" || el.querySelector(BLOCK_SELECTOR)) {
         visit(el.childNodes);
         continue;
       }
