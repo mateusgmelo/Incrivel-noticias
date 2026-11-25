@@ -16,13 +16,15 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:setup": "npm run db:migrate && npm run db:seed",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "ingest": "tsx scripts/ingest.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.4",
     "jose": "^6.2.18",
     "next": "15.5.29",
+    "node-html-parser": "^9.0.7",
     "pg": "^8.23.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",

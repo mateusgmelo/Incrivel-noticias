@@ -9,7 +9,7 @@ Portal de notícias (Next.js 15 App Router + Drizzle/Postgres). Projeto técnico
 - Resposta da API: `{ data, meta? }` ou `{ error: { code, message, details? } }`.
 - Mudança de status de artigo só por endpoint de ação + `TRANSITIONS` em `article.policy.ts`.
 - Toda mudança de schema: editar `src/server/db/schema.ts` → `npm run db:generate` → commitar o SQL gerado.
-- Agregador: nunca armazenar o corpo de matérias de terceiros.
+- Agregador: o corpo de matérias de terceiros só é armazenado quando a licença da fonte permite (modo `full` em `ingest.sources.ts`), com crédito e link. Fontes comerciais: só manchete + link. Nunca renderizar HTML de terceiros.
 - Commits pequenos, conventional commits, mensagens em português.
 
 ## Comandos

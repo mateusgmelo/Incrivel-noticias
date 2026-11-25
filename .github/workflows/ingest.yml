@@ -1,0 +1,32 @@
+# Agregador a cada 30 minutos.
+# O cron da Vercel no plano gratuito roda uma vez por dia; este agendamento chama o mesmo
+# endpoint protegido (/api/cron/ingest) com o mesmo segredo.
+# Requer o secret CRON_SECRET no repositório (Settings → Secrets and variables → Actions).
+name: Agregador (agendado)
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Dispara a importação
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://incrivelnoticias.vercel.app' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::warning::Secret CRON_SECRET não configurado; nada a fazer."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error --max-time 90 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$SITE_URL/api/cron/ingest"

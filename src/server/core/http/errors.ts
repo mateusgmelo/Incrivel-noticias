@@ -51,7 +51,10 @@ export class ConflictError extends AppError {
 }
 
 export class TooManyRequestsError extends AppError {
-  constructor(message = "Muitas tentativas. Tente novamente em instantes.") {
-    super(429, "TOO_MANY_REQUESTS", message);
+  constructor(
+    public readonly retryAfterSeconds?: number,
+    message = "Muitas tentativas. Tente novamente em instantes.",
+  ) {
+    super(429, "TOO_MANY_REQUESTS", message, retryAfterSeconds ? { retryAfterSeconds } : undefined);
   }
 }

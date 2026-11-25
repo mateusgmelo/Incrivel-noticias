@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArticleBody } from "@/components/site/ArticleBody";
 import { ArticleCard } from "@/components/site/ArticleCard";
 import { ViewTracker } from "@/components/site/ViewTracker";
 import { formatDateTime } from "@/lib/format";
@@ -76,7 +77,9 @@ export default async function ArticlePage({ params }: Props) {
         <h1 className="headline mt-2 text-3xl font-bold leading-tight sm:text-5xl">{article.title}</h1>
         <p className="mt-4 text-lg text-muted sm:text-xl">{article.excerpt}</p>
         <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 border-y border-line py-3 text-sm text-muted">
-          <span className="font-semibold text-ink">{imported ? article.sourceName : `Por ${article.authorName}`}</span>
+          <span className="font-semibold text-ink">
+            {imported ? (article.fullText && article.sourceAuthor ? `Por ${article.sourceAuthor}` : article.sourceName) : `Por ${article.authorName}`}
+          </span>
           <span>·</span>
           <time dateTime={article.publishedAt?.toISOString()}>{formatDateTime(article.publishedAt)}</time>
           {article.views > 0 && (
@@ -92,7 +95,7 @@ export default async function ArticlePage({ params }: Props) {
           <img src={article.coverImageUrl} alt="" className="mt-6 aspect-[16/9] w-full rounded-lg object-cover" />
         )}
 
-        {imported ? (
+        {imported && !article.fullText ? (
           <div className="mt-8 rounded-lg border border-line bg-paper p-6">
             <p className="text-sm text-muted">
               Esta é uma manchete agregada. O Incrível Notícias exibe apenas o título e o resumo publicados pela fonte no
@@ -105,9 +108,19 @@ export default async function ArticlePage({ params }: Props) {
             )}
           </div>
         ) : (
-          <div className="prose-news mt-8">
-            {article.body.split(/\n{2,}/).map((p, i) => <p key={i}>{p}</p>)}
-          </div>
+          <ArticleBody body={article.body} />
+        )}
+
+        {imported && article.fullText && (
+          <p className="mt-6 rounded-lg border border-line bg-paper p-4 text-sm text-muted">
+            Conteúdo publicado originalmente pela {article.sourceName}, reproduzido conforme a política de reprodução da
+            agência, que autoriza o uso com indicação da fonte.{" "}
+            {article.sourceUrl && (
+              <a href={article.sourceUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-ink underline">
+                Ver a matéria original ↗
+              </a>
+            )}
+          </p>
         )}
 
         {article.tags.length > 0 && (

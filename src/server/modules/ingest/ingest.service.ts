@@ -8,29 +8,49 @@ import { users } from "@/server/db/schema";
 import { auditService } from "@/server/modules/audit/audit.service";
 import { articlesRepository } from "@/server/modules/articles/article.repository";
 import { categoriesRepository } from "@/server/modules/categories/category.repository";
+import { cleanCredit, htmlToBody, isOwnStaff, isReproductionForbidden } from "./ingest.fulltext";
 import { mapFeedItem, type FeedItem } from "./ingest.mapper";
-import { feedSources, IMPORT_CATEGORY, type FeedSource } from "./ingest.sources";
+import { categoryForUrl, feedSources, IMPORT_CATEGORY, type FeedSource } from "./ingest.sources";
 
-export type SourceResult = { source: string; fetched: number; created: number; skipped: number; error?: string };
+export type SourceResult = {
+  source: string;
+  fetched: number;
+  created: number;
+  published: number;
+  skipped: number;
+  /** Itens fora da licença (agência parceira, "proibida a reprodução") — não importados. */
+  blocked: number;
+  error?: string;
+};
 
-const parser: Parser<object, FeedItem> = new Parser({
+type RawItem = FeedItem & { descriptionHtml?: string };
+
+const parser: Parser<object, RawItem> = new Parser({
   timeout: 8_000,
-  headers: { "User-Agent": "IncrivelNoticiasBot/1.0 (agregador de manchetes)" },
-  customFields: { item: [["media:content", "media"]] },
+  headers: { "User-Agent": "IncrivelNoticiasBot/1.0 (agregador de noticias)" },
+  customFields: {
+    item: [
+      ["media:content", "media"],
+      ["imagem-destaque", "imagemDestaque"],
+      ["description", "descriptionHtml"],
+      ["dc:creator", "creator"],
+    ],
+  },
 });
 
-async function importCategoryId(): Promise<string> {
-  const existing = await categoriesRepository.findBySlug(IMPORT_CATEGORY.slug);
-  if (existing) return existing.id;
-  const created = await categoriesRepository.insert({
-    ...IMPORT_CATEGORY,
-    description: "Manchetes agregadas de outros portais, com link para a matéria original.",
-  });
-  return created.id;
+/** Resolve categorias uma vez por execução (fontes rodam em paralelo). */
+function categoryResolver() {
+  const cache = new Map<string, Promise<string>>();
+  return (cat: { name: string; slug: string; description?: string }) => {
+    if (!cache.has(cat.slug)) cache.set(cat.slug, categoriesRepository.ensure(cat));
+    return cache.get(cat.slug)!;
+  };
 }
 
-async function ingestSource(source: FeedSource, ctx: { authorId: string; categoryId: string; limit: number }): Promise<SourceResult> {
-  const result: SourceResult = { source: source.name, fetched: 0, created: 0, skipped: 0 };
+type Ctx = { authorId: string; limit: number; category: ReturnType<typeof categoryResolver> };
+
+async function ingestSource(source: FeedSource, ctx: Ctx): Promise<SourceResult> {
+  const result: SourceResult = { source: source.name, fetched: 0, created: 0, published: 0, skipped: 0, blocked: 0 };
   try {
     const feed = await parser.parseURL(source.url);
     const items = (feed.items ?? []).slice(0, ctx.limit);
@@ -42,18 +62,48 @@ async function ingestSource(source: FeedSource, ctx: { authorId: string; categor
         result.skipped++;
         continue;
       }
+
+      let body = item.excerpt;
+      let fullText = false;
+      let categoryId: string;
+
+      if (source.mode === "full") {
+        const html = raw.descriptionHtml ?? raw.content ?? "";
+        // Licença: só texto da própria agência e sem aviso de reprodução proibida.
+        if (isReproductionForbidden(html) || !isOwnStaff(raw.creator, source.name)) {
+          result.blocked++;
+          continue;
+        }
+        const extracted = htmlToBody(html);
+        if (extracted) {
+          body = extracted;
+          fullText = true;
+        }
+        categoryId = await ctx.category(categoryForUrl(item.sourceUrl));
+      } else {
+        categoryId = await ctx.category({ ...IMPORT_CATEGORY, description: "Manchetes de outros portais, com link para a matéria original." });
+      }
+
+      // Publica direto só se a fonte é confiável E o texto integral foi extraído; senão, fila do editor.
+      const publish = source.autoPublish && fullText;
+
       // Idempotente: ON CONFLICT (source_url) DO NOTHING — rodar 10x não duplica nada.
       const inserted = await articlesRepository.insertIfNewSource({
         ...item,
-        body: item.excerpt,
+        body,
+        fullText,
+        sourceAuthor: cleanCredit(raw.creator),
         slug: `${slugify(item.title, 160)}-${randomSuffix()}`,
-        status: "IN_REVIEW", // passa por um editor antes de ir ao ar
+        status: publish ? "PUBLISHED" : "IN_REVIEW",
         source: "IMPORTED",
         authorId: ctx.authorId,
-        categoryId: ctx.categoryId,
+        categoryId,
       });
-      if (inserted) result.created++;
-      else result.skipped++;
+      if (!inserted) result.skipped++;
+      else {
+        result.created++;
+        if (publish) result.published++;
+      }
     }
   } catch (err) {
     result.error = err instanceof Error ? err.message : "Falha desconhecida";
@@ -81,16 +131,19 @@ export const ingestService = {
   },
 
   async execute(authorId: string, limit: number) {
-    const categoryId = await importCategoryId();
+    const category = categoryResolver();
     // Fontes em paralelo; a falha de uma não derruba as outras.
-    const results = await Promise.all(feedSources().map((s) => ingestSource(s, { authorId, categoryId, limit })));
+    const results = await Promise.all(feedSources().map((s) => ingestSource(s, { authorId, limit, category })));
+    const sum = (k: "created" | "published" | "skipped" | "blocked") => results.reduce((n, r) => n + r[k], 0);
     const summary = {
-      created: results.reduce((n, r) => n + r.created, 0),
-      skipped: results.reduce((n, r) => n + r.skipped, 0),
+      created: sum("created"),
+      published: sum("published"),
+      skipped: sum("skipped"),
+      blocked: sum("blocked"),
       failedSources: results.filter((r) => r.error).length,
       results,
     };
-    await auditService.record({ actorId: authorId, action: "ingest.run", entity: "ingest", meta: { created: summary.created, skipped: summary.skipped, failedSources: summary.failedSources } });
+    await auditService.record({ actorId: authorId, action: "ingest.run", entity: "ingest", meta: { created: summary.created, published: summary.published, skipped: summary.skipped, blocked: summary.blocked, failedSources: summary.failedSources } });
     return summary;
   },
 };

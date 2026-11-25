@@ -6,7 +6,7 @@ export function Footer() {
       <div className="mx-auto grid max-w-6xl gap-6 px-4 py-10 text-sm text-muted sm:grid-cols-3">
         <div>
           <p className="headline text-xl font-bold text-ink"><span className="text-brand">Incrível</span> Notícias</p>
-          <p className="mt-2">Projeto de demonstração. Conteúdo próprio é fictício; manchetes agregadas sempre levam à fonte original.</p>
+          <p className="mt-2">Notícias da Agência Brasil reproduzidas conforme sua política de reprodução, com crédito e link para o original. Manchetes de outros portais levam à fonte.</p>
         </div>
         <div>
           <p className="font-semibold text-ink">Navegação</p>

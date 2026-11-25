@@ -10,7 +10,7 @@ import { z, ZodError, type ZodTypeAny } from "zod";
 import { getCurrentUser } from "@/server/core/auth/session";
 import { type Actor, hasRole } from "@/server/core/auth/rbac";
 import type { Role } from "@/server/db/schema";
-import { AppError, BadRequestError, ForbiddenError, UnauthorizedError, ValidationError } from "./errors";
+import { AppError, BadRequestError, ForbiddenError, TooManyRequestsError, UnauthorizedError, ValidationError } from "./errors";
 import { errorResponse } from "./responses";
 
 type Infer<S> = S extends ZodTypeAny ? z.infer<S> : undefined;
@@ -85,6 +85,11 @@ export function toErrorResponse(err: unknown, req?: NextRequest): Response {
   if (err instanceof ZodError) {
     const e = new ValidationError(err.flatten());
     return errorResponse(e.status, e.code, e.message, e.details);
+  }
+  if (err instanceof TooManyRequestsError) {
+    const res = errorResponse(err.status, err.code, err.message, err.details);
+    if (err.retryAfterSeconds) res.headers.set("Retry-After", String(err.retryAfterSeconds));
+    return res;
   }
   if (err instanceof AppError) {
     return errorResponse(err.status, err.code, err.message, err.details);

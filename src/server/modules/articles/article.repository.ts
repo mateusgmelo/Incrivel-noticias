@@ -120,7 +120,7 @@ export const articlesRepository = {
   async findFull(where: { id?: string; slug?: string }) {
     const cond = where.id ? eq(articles.id, where.id) : eq(articles.slug, where.slug!);
     const [row] = await db()
-      .select({ ...cardColumns, body: articles.body, sourceUrl: articles.sourceUrl, createdAt: articles.createdAt })
+      .select({ ...cardColumns, body: articles.body, sourceUrl: articles.sourceUrl, sourceAuthor: articles.sourceAuthor, fullText: articles.fullText, createdAt: articles.createdAt })
       .from(articles)
       .innerJoin(users, eq(users.id, articles.authorId))
       .innerJoin(categories, eq(categories.id, articles.categoryId))

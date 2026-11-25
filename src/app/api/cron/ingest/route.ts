@@ -6,7 +6,7 @@ import { toErrorResponse } from "@/server/core/http/route";
 import { ingestService } from "@/server/modules/ingest/ingest.service";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 /** Chamado pelo Vercel Cron (vercel.json). A Vercel envia "Authorization: Bearer $CRON_SECRET". */
 export async function GET(req: NextRequest) {

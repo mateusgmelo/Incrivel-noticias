@@ -91,6 +91,10 @@ export const articles = pgTable(
     sourceName: varchar("source_name", { length: 120 }),
     /** Link da matéria original (só importadas). Único => deduplicação na ingestão. */
     sourceUrl: text("source_url").unique(),
+    /** Crédito do autor na fonte (ex.: "Fulano - Repórter da Agência Brasil"). */
+    sourceAuthor: varchar("source_author", { length: 200 }),
+    /** true = texto integral republicado sob licença da fonte; false = só manchete + link. */
+    fullText: boolean("full_text").notNull().default(false),
 
     searchVector: tsvector("search_vector").generatedAlwaysAs(searchVectorExpr),
 
@@ -190,3 +194,13 @@ export type NewArticle = typeof articles.$inferInsert;
 export type Tag = typeof tags.$inferSelect;
 export type Role = (typeof roleEnum.enumValues)[number];
 export type ArticleStatus = (typeof articleStatusEnum.enumValues)[number];
+
+/**
+ * Rate limit compartilhado entre instâncias (serverless não tem memória comum).
+ * Janela fixa por chave; atualização atômica em um único UPSERT.
+ */
+export const rateLimits = pgTable("rate_limits", {
+  key: varchar("key", { length: 300 }).primaryKey(),
+  count: integer("count").notNull(),
+  resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+});

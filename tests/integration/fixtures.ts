@@ -9,7 +9,7 @@ export const PASSWORD = "Senha@Teste123";
 /** Zera o banco preservando o schema (ordem resolvida pelo CASCADE). */
 export async function resetDatabase() {
   await db().execute(
-    sql`TRUNCATE article_tags, tags, audit_logs, articles, categories, users RESTART IDENTITY CASCADE`,
+    sql`TRUNCATE article_tags, tags, audit_logs, articles, categories, users, rate_limits RESTART IDENTITY CASCADE`,
   );
 }
 
