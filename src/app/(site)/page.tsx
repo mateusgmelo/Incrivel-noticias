@@ -4,8 +4,10 @@ import { articlesService } from "@/server/modules/articles/article.service";
 
 export default async function HomePage() {
   const { featured, latest, mostRead } = await articlesService.homepage();
-  const [hero, ...secondary] = featured.length ? featured : latest.slice(0, 1);
-  const rest = featured.length ? latest : latest.slice(1);
+  // Topo sempre com 3 matérias: destaques marcados pelo editor primeiro, completando com as mais recentes.
+  const top = [...featured, ...latest.filter((a) => !featured.some((f) => f.id === a.id))].slice(0, 3);
+  const [hero, ...secondary] = top;
+  const rest = latest.filter((a) => !top.some((t) => t.id === a.id));
 
   if (!hero) {
     return <p className="py-20 text-center text-muted">Nenhuma notícia publicada ainda.</p>;
