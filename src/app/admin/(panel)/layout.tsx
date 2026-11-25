@@ -3,6 +3,7 @@ import { LogoutButton } from "@/components/admin/LogoutButton";
 import { NavLink } from "@/components/admin/NavLink";
 import { can, ROLE_LABEL } from "@/server/core/auth/rbac";
 import { requireUser } from "@/lib/auth";
+import { LogoMark } from "@/components/shared/Logo";
 
 export const dynamic = "force-dynamic";
 export const metadata = { robots: { index: false } };
@@ -24,7 +25,8 @@ export default async function PanelLayout({ children }: { children: React.ReactN
       <header className="sticky top-0 z-10 border-b border-line bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-6">
-            <Link href="/admin" className="headline text-xl font-bold">
+            <Link href="/admin" className="headline flex items-center gap-2 text-xl font-bold">
+              <LogoMark size={30} />
               <span className="text-brand">Incrível</span> <span className="text-sm font-sans font-semibold uppercase tracking-wider text-muted">Redação</span>
             </Link>
             <nav className="flex gap-1 overflow-x-auto text-sm">
