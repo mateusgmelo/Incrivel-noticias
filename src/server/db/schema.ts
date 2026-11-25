@@ -91,6 +91,10 @@ export const articles = pgTable(
     sourceName: varchar("source_name", { length: 120 }),
     /** Link da matéria original (só importadas). Único => deduplicação na ingestão. */
     sourceUrl: text("source_url").unique(),
+    /** Crédito do autor na fonte (ex.: "Fulano - Repórter da Agência Brasil"). */
+    sourceAuthor: varchar("source_author", { length: 200 }),
+    /** true = texto integral republicado sob licença da fonte; false = só manchete + link. */
+    fullText: boolean("full_text").notNull().default(false),
 
     searchVector: tsvector("search_vector").generatedAlwaysAs(searchVectorExpr),
 
